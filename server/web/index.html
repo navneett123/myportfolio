@@ -1,0 +1,38 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MyPersonalPortfolio – Enterprise Suite</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">MP <span>MyPersonalPortfolio</span></div>
+    <nav class="menu">
+      <button data-page="dashboard" class="active">Dashboard</button>
+      <button data-page="expenses">Expenses</button>
+      <button data-page="insights">Insights</button>
+      <button data-page="investments">Investments</button>
+      <button data-page="settings">Settings</button>
+    </nav>
+  </header>
+
+  <div class="container">
+    <aside class="sidebar">
+      <button data-page="dashboard" class="item active">📈 Dashboard</button>
+      <button data-page="expenses" class="item">💼 Expenses</button>
+      <button data-page="insights" class="item">🥧 Insights</button>
+      <button data-page="investments" class="item">🪙 Investments</button>
+      <button data-page="settings" class="item">⚙️ Settings</button>
+    </aside>
+    <main id="app" class="content"></main>
+  </div>
+
+  <footer class="footer"><small>Local JSON storage. Build skills, not complexity.</small></footer>
+  <script src="app.js"></script>
+</body>
+</html>
