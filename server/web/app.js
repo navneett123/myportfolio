@@ -96,16 +96,15 @@ async function renderExpenses(){
 async function renderInsights(){ await renderDashboard(); }
 async function renderInvestments(){
 const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
-  let savings = Math.max(0, sum.savings || 0);   // available savings from backend
-  let allocated = 0;                              // this-session allocation
+  let savings = Math.max(0, sum.savings || 0);
+  let allocated = 0;
 
-  // 2) Build UI
   const assets = [
-    { key:'gold',   name:'Gold',                band:'Low–Med • 6–10%',  note:'Inflation hedge; ETFs/SGBs', weight:0.15 },
-    { key:'bonds',  name:'Bonds / Debt',       band:'Low • 6–8%',       note:'Govt/AAA debt funds',        weight:0.25 },
-    { key:'mf',     name:'Mutual Funds',       band:'Med • 10–14%',     note:'Index / large & flexi-cap',  weight:0.30 },
-    { key:'equity', name:'Equity (Direct)',    band:'Med–High • 12–18%',note:'Blue chips / diversified',   weight:0.20 },
-    { key:'reits',  name:'Real Estate (REITs)',band:'Med • 8–12%',      note:'Listed REITs',               weight:0.10 },
+    { key:'gold',   name:'Gold',                band:'Low–Med • 6–10%',   note:'Inflation hedge; ETFs/SGBs',  icon:'🥇' },
+    { key:'bonds',  name:'Bonds / Debt',       band:'Low • 6–8%',        note:'Govt/AAA debt funds',         icon:'💵' },
+    { key:'mf',     name:'Mutual Funds',       band:'Med • 10–14%',      note:'Index / large & flexi-cap',   icon:'📊' },
+    { key:'equity', name:'Equity (Direct)',    band:'Med–High • 12–18%', note:'Blue chips / diversified',    icon:'📈' },
+    { key:'reits',  name:'Real Estate (REITs)',band:'Med • 8–12%',       note:'Listed REITs',                icon:'🏠' },
   ];
 
   $app.innerHTML = `
@@ -115,34 +114,29 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
         <span class="muted">Allocate from your available savings only</span>
       </div>
       <div class="inv-pills">
-        <div class="pill">
-          <div class="pill-k">Available savings</div>
-          <div id="invAvail" class="pill-v">${INR(savings)}</div>
-        </div>
-        <div class="pill">
-          <div class="pill-k">Allocated (session)</div>
-          <div id="invAlloc" class="pill-v">${INR(allocated)}</div>
-        </div>
+        <div class="pill"><div class="pill-k">Available savings</div><div id="invAvail" class="pill-v">${INR(savings)}</div></div>
+        <div class="pill"><div class="pill-k">Allocated (session)</div><div id="invAlloc" class="pill-v">${INR(allocated)}</div></div>
       </div>
     </div>
 
-    <div class="inv-grid">
+    <div class="inv-wrap">
       ${assets.map(a => `
-        <article class="inv-card" data-key="${a.key}" data-weight="${a.weight}">
-          <div class="inv-head">
-            <h3>${a.name}</h3>
+        <article class="inv-card inv-${a.key}" data-key="${a.key}">
+          <header class="card-head">
+            <div class="card-title"><span class="card-ic">${a.icon}</span>${a.name}</div>
             <span class="badge">${a.band}</span>
-          </div>
+          </header>
+
           <p class="muted">${a.note}</p>
 
-          <div class="inv-ctrl">
-            <button class="inv-minus" title="Reduce">−</button>
-            <input type="number" class="inv-amt" min="0" step="100" placeholder="₹ amount">
-            <button class="inv-plus" title="Add more">+</button>
-            <button class="inv-invest">Invest</button>
+          <div class="ctrl">
+            <button class="btn minus" title="Reduce">−</button>
+            <input type="number" class="amt" min="0" step="100" placeholder="₹ amount">
+            <button class="btn plus"  title="Add">+</button>
           </div>
 
-          <div class="inv-msg muted"></div>
+          <button class="btn invest" title="Invest">Invest</button>
+          <div class="msg muted"></div>
         </article>
       `).join('')}
     </div>
@@ -150,35 +144,32 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
     <div id="invToast" class="inv-toast" style="display:none"></div>
   `;
 
-  // 3) Small helpers
   const availEl = document.getElementById('invAvail');
   const allocEl = document.getElementById('invAlloc');
-  const toast = document.getElementById('invToast');
-  const cards = Array.from(document.querySelectorAll('.inv-card'));
+  const toast   = document.getElementById('invToast');
 
-  const refresh = () => {
-    availEl.textContent = INR(savings - allocated);
-    allocEl.textContent = INR(allocated);
-  };
   const say = (msg, ok=true) => {
     toast.textContent = msg;
     toast.style.background = ok ? '#16a34a' : '#dc2626';
     toast.style.display = 'block';
     setTimeout(()=> toast.style.display = 'none', 1200);
   };
+  const refresh = () => {
+    availEl.textContent = INR(Math.max(0, savings - allocated));
+    allocEl.textContent = INR(allocated);
+  };
 
-  // 4) Wire per-card interactions
-  cards.forEach(card => {
-    const input  = card.querySelector('.inv-amt');
-    const minus  = card.querySelector('.inv-minus');
-    const plus   = card.querySelector('.inv-plus');
-    const invest = card.querySelector('.inv-invest');
-    const msg    = card.querySelector('.inv-msg');
+  document.querySelectorAll('.inv-card').forEach(card => {
+    const input  = card.querySelector('.amt');
+    const plus   = card.querySelector('.plus');
+    const minus  = card.querySelector('.minus');
+    const invest = card.querySelector('.invest');
+    const msg    = card.querySelector('.msg');
     const step   = Math.max(1, parseInt(input.getAttribute('step') || '100', 10));
 
     plus.addEventListener('click', () => {
-      const room = (savings - allocated);
-      if (room <= 0) return say('No savings left to allocate', false);
+      const room = Math.max(0, savings - allocated);
+      if (room <= 0) return say('No savings left', false);
       const add = Math.min(step, room);
       input.value = Math.floor((+input.value || 0) + add);
     });
@@ -187,11 +178,10 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
       input.value = Math.max(0, Math.floor((+input.value || 0) - step));
     });
 
-    invest.addEventListener('click', async () => {
+    invest.addEventListener('click', () => {
       const amount = Math.floor(+input.value || 0);
-      const room = (savings - allocated);
-
-      if (amount <= 0)  return say('Enter an amount', false);
+      const room = Math.max(0, savings - allocated);
+      if (amount <= 0)   return say('Enter an amount', false);
       if (amount > room) return say('Exceeds available savings', false);
 
       allocated += amount;
@@ -199,8 +189,8 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
       msg.textContent = `Invested ${INR(amount)} ✅`;
       refresh();
 
-      // (Optional) Persist later:
-      // await postJSON('/api/investments/allocate', { asset: card.dataset.key, amount });
+      // later: persist with POST if you wish
+      // postJSON('/api/investments/allocate', { asset: card.dataset.key, amount });
     });
   });
 
