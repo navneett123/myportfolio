@@ -24,3 +24,27 @@ button.primary{ background:var(--accent); color:#fff; border:none; padding:8px 1
 /* Compact Pie container */
 .pie-wrap{ height:260px; max-width:520px; margin:0 auto; }
 @media (max-width:640px){ .pie-wrap{ height:220px; max-width:420px; } }
+/* ==== Investments (cards) ==== */
+.inv-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;margin:10px 0 14px;gap:12px}
+.inv-title{display:flex;gap:10px;align-items:center}
+.inv-title .muted{color:#6b7280;font-size:12px}
+.inv-pills{display:flex;gap:12px;flex-wrap:wrap}
+.pill{background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:10px 12px}
+.pill-k{font-size:12px;color:#6b7280}
+.pill-v{font-weight:700}
+
+.inv-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.inv-card{background:#f8fafc;border:1px solid #e5e7eb;border-radius:14px;padding:14px}
+.inv-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.inv-head h3{margin:0;font-size:16px}
+.badge{font-size:11px;padding:3px 8px;border:1px solid #e5e7eb;border-radius:999px;color:#6b7280}
+.muted{color:#6b7280}
+
+.inv-ctrl{display:flex;gap:8px;align-items:center}
+.inv-amt{flex:1;padding:8px 10px;border:1px solid #e5e7eb;border-radius:10px}
+.inv-minus,.inv-plus,.inv-invest{border:1px solid #e5e7eb;border-radius:10px;background:#fff;cursor:pointer}
+.inv-minus,.inv-plus{width:34px;height:34px}
+.inv-invest{padding:8px 10px}
+
+.inv-toast{position:fixed;right:14px;bottom:14px;color:#fff;padding:10px 12px;border-radius:10px;font-size:12px}
+
