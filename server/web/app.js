@@ -95,26 +95,115 @@ async function renderExpenses(){
 
 async function renderInsights(){ await renderDashboard(); }
 async function renderInvestments(){
+const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
+  let savings = Math.max(0, sum.savings || 0);   // available savings from backend
+  let allocated = 0;                              // this-session allocation
+
+  // 2) Build UI
+  const assets = [
+    { key:'gold',   name:'Gold',                band:'Low–Med • 6–10%',  note:'Inflation hedge; ETFs/SGBs', weight:0.15 },
+    { key:'bonds',  name:'Bonds / Debt',       band:'Low • 6–8%',       note:'Govt/AAA debt funds',        weight:0.25 },
+    { key:'mf',     name:'Mutual Funds',       band:'Med • 10–14%',     note:'Index / large & flexi-cap',  weight:0.30 },
+    { key:'equity', name:'Equity (Direct)',    band:'Med–High • 12–18%',note:'Blue chips / diversified',   weight:0.20 },
+    { key:'reits',  name:'Real Estate (REITs)',band:'Med • 8–12%',      note:'Listed REITs',               weight:0.10 },
+  ];
+
   $app.innerHTML = `
-    <div class="card">
-      <div class="grid grid-3">
-        <div><label>SIP / month (₹)</label><input id="sip" value="10000"/></div>
-        <div><label>Expected return p.a. (%)</label><input id="rate" value="12"/></div>
-        <div><label>Years</label><input id="years" value="10"/></div>
+    <div class="inv-top">
+      <div class="inv-title">
+        <strong>Investments</strong>
+        <span class="muted">Allocate from your available savings only</span>
       </div>
-      <div class="grid grid-3" style="margin-top:12px;">
-        <div class="kpi"><div>Future Value</div><div class="val" id="fv">—</div></div>
-        <div><label>Inflation p.a. (%)</label><input id="infl" value="6"/></div>
-        <div class="kpi"><div>FV (Real)</div><div class="val" id="fvreal">—</div></div>
+      <div class="inv-pills">
+        <div class="pill">
+          <div class="pill-k">Available savings</div>
+          <div id="invAvail" class="pill-v">${INR(savings)}</div>
+        </div>
+        <div class="pill">
+          <div class="pill-k">Allocated (session)</div>
+          <div id="invAlloc" class="pill-v">${INR(allocated)}</div>
+        </div>
       </div>
-      <div class="grid" style="margin-top:12px;">
-        <div class="kpi"><div>SIP for ₹1 Cr</div><div class="val" id="req">—</div></div>
-      </div>
-    </div>`;
-  async function recalc(){ const sip=+document.getElementById('sip').value||0, rate=+document.getElementById('rate').value||0, years=+document.getElementById('years').value||0, infl=+document.getElementById('infl').value||0;
-    const { fv } = await postJSON('/api/investments/sip/fv',{ sip, annualRatePct:rate, years }); document.getElementById('fv').textContent = INR(Math.round(fv));
-    const { fvReal } = await postJSON('/api/investments/sip/fv-real',{ fv, inflationPct:infl, years }); document.getElementById('fvreal').textContent = INR(Math.round(fvReal));
-    const { sip: req } = await postJSON('/api/investments/sip/required',{ target:10000000, annualRatePct:rate, years }); document.getElementById('req').textContent = INR(Math.round(req)); }
-  ['sip','rate','years','infl'].forEach(id=> document.getElementById(id).addEventListener('input', recalc)); recalc();
+    </div>
+
+    <div class="inv-grid">
+      ${assets.map(a => `
+        <article class="inv-card" data-key="${a.key}" data-weight="${a.weight}">
+          <div class="inv-head">
+            <h3>${a.name}</h3>
+            <span class="badge">${a.band}</span>
+          </div>
+          <p class="muted">${a.note}</p>
+
+          <div class="inv-ctrl">
+            <button class="inv-minus" title="Reduce">−</button>
+            <input type="number" class="inv-amt" min="0" step="100" placeholder="₹ amount">
+            <button class="inv-plus" title="Add more">+</button>
+            <button class="inv-invest">Invest</button>
+          </div>
+
+          <div class="inv-msg muted"></div>
+        </article>
+      `).join('')}
+    </div>
+
+    <div id="invToast" class="inv-toast" style="display:none"></div>
+  `;
+
+  // 3) Small helpers
+  const availEl = document.getElementById('invAvail');
+  const allocEl = document.getElementById('invAlloc');
+  const toast = document.getElementById('invToast');
+  const cards = Array.from(document.querySelectorAll('.inv-card'));
+
+  const refresh = () => {
+    availEl.textContent = INR(savings - allocated);
+    allocEl.textContent = INR(allocated);
+  };
+  const say = (msg, ok=true) => {
+    toast.textContent = msg;
+    toast.style.background = ok ? '#16a34a' : '#dc2626';
+    toast.style.display = 'block';
+    setTimeout(()=> toast.style.display = 'none', 1200);
+  };
+
+  // 4) Wire per-card interactions
+  cards.forEach(card => {
+    const input  = card.querySelector('.inv-amt');
+    const minus  = card.querySelector('.inv-minus');
+    const plus   = card.querySelector('.inv-plus');
+    const invest = card.querySelector('.inv-invest');
+    const msg    = card.querySelector('.inv-msg');
+    const step   = Math.max(1, parseInt(input.getAttribute('step') || '100', 10));
+
+    plus.addEventListener('click', () => {
+      const room = (savings - allocated);
+      if (room <= 0) return say('No savings left to allocate', false);
+      const add = Math.min(step, room);
+      input.value = Math.floor((+input.value || 0) + add);
+    });
+
+    minus.addEventListener('click', () => {
+      input.value = Math.max(0, Math.floor((+input.value || 0) - step));
+    });
+
+    invest.addEventListener('click', async () => {
+      const amount = Math.floor(+input.value || 0);
+      const room = (savings - allocated);
+
+      if (amount <= 0)  return say('Enter an amount', false);
+      if (amount > room) return say('Exceeds available savings', false);
+
+      allocated += amount;
+      input.value = '';
+      msg.textContent = `Invested ${INR(amount)} ✅`;
+      refresh();
+
+      // (Optional) Persist later:
+      // await postJSON('/api/investments/allocate', { asset: card.dataset.key, amount });
+    });
+  });
+
+  refresh();
 }
 function renderSettings(){ $app.innerHTML = `<div class="card"><div class="notice">FY fixed (Apr→Mar). Extend server to change defaults.</div></div>`; }
