@@ -10,7 +10,13 @@ const MONTH_LABELS = ['Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan
 async function getJSON(u){ const r=await fetch(u); return r.json(); }
 async function postJSON(u,b){ const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); }
 async function putJSON(u,b){ const r=await fetch(u,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}); return r.json(); }
-const INR = (x)=> new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(Number(x||0));
+const USD = (x) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 0
+}).format(x);
+
+
 
 async function renderDashboard(){
   $app.innerHTML = `
@@ -94,10 +100,17 @@ async function renderExpenses(){
 }
 
 async function renderInsights(){ await renderDashboard(); }
-async function renderInvestments(){
-const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
-  let savings = Math.max(0, sum.savings || 0);
-  let allocated = 0;
+
+async function renderInvestments() {
+  // Pull savings and current investments
+  const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
+  const invested = await getJSON('/api/investments/total');
+
+  let baseSavings = Math.max(0, Number(sum.savings || 0));
+  let persistentAllocated = Math.max(0, Number(invested.totalUSD || 0));
+  let sessionAllocated = 0;
+
+  const available = () => Math.max(0, baseSavings - persistentAllocated - sessionAllocated);
 
   const assets = [
     { key:'gold',   name:'Gold',                band:'Low–Med • 6–10%',   note:'Inflation hedge; ETFs/SGBs',  icon:'🥇' },
@@ -111,11 +124,12 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
     <div class="inv-top">
       <div class="inv-title">
         <strong>Investments</strong>
-        <span class="muted">Allocate from your available savings only</span>
+        <span class="muted">Allocate from your available savings only (USD)</span>
       </div>
       <div class="inv-pills">
-        <div class="pill"><div class="pill-k">Available savings</div><div id="invAvail" class="pill-v">${INR(savings)}</div></div>
-        <div class="pill"><div class="pill-k">Allocated (session)</div><div id="invAlloc" class="pill-v">${INR(allocated)}</div></div>
+        <div class="pill"><div class="pill-k">Available</div><div id="invAvail" class="pill-v">${USD(available())}</div></div>
+        <div class="pill"><div class="pill-k">Allocated (session)</div><div id="invAlloc" class="pill-v">${USD(sessionAllocated)}</div></div>
+        <div class="pill"><div class="pill-k">Allocated (total)</div><div id="invAllocPersist" class="pill-v">${USD(persistentAllocated)}</div></div>
       </div>
     </div>
 
@@ -126,15 +140,12 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
             <div class="card-title"><span class="card-ic">${a.icon}</span>${a.name}</div>
             <span class="badge">${a.band}</span>
           </header>
-
           <p class="muted">${a.note}</p>
-
           <div class="ctrl">
             <button class="btn minus" title="Reduce">−</button>
-            <input type="number" class="amt" min="0" step="100" placeholder="₹ amount">
+            <input type="number" class="amt" min="0" step="100" placeholder="$ amount">
             <button class="btn plus"  title="Add">+</button>
           </div>
-
           <button class="btn invest" title="Invest">Invest</button>
           <div class="msg muted"></div>
         </article>
@@ -146,17 +157,19 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
 
   const availEl = document.getElementById('invAvail');
   const allocEl = document.getElementById('invAlloc');
-  const toast   = document.getElementById('invToast');
+  const persistEl = document.getElementById('invAllocPersist');
+  const toast = document.getElementById('invToast');
 
   const say = (msg, ok=true) => {
     toast.textContent = msg;
     toast.style.background = ok ? '#16a34a' : '#dc2626';
     toast.style.display = 'block';
-    setTimeout(()=> toast.style.display = 'none', 1200);
+    setTimeout(() => toast.style.display = 'none', 1200);
   };
   const refresh = () => {
-    availEl.textContent = INR(Math.max(0, savings - allocated));
-    allocEl.textContent = INR(allocated);
+    availEl.textContent = USD(available());
+    allocEl.textContent = USD(sessionAllocated);
+    persistEl.textContent = USD(persistentAllocated);
   };
 
   document.querySelectorAll('.inv-card').forEach(card => {
@@ -168,32 +181,34 @@ const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
     const step   = Math.max(1, parseInt(input.getAttribute('step') || '100', 10));
 
     plus.addEventListener('click', () => {
-      const room = Math.max(0, savings - allocated);
+      const room = available();
       if (room <= 0) return say('No savings left', false);
-      const add = Math.min(step, room);
-      input.value = Math.floor((+input.value || 0) + add);
+      input.value = Math.floor((+input.value || 0) + Math.min(step, room));
     });
 
     minus.addEventListener('click', () => {
       input.value = Math.max(0, Math.floor((+input.value || 0) - step));
     });
 
-    invest.addEventListener('click', () => {
+    invest.addEventListener('click', async () => {
       const amount = Math.floor(+input.value || 0);
-      const room = Math.max(0, savings - allocated);
-      if (amount <= 0)   return say('Enter an amount', false);
-      if (amount > room) return say('Exceeds available savings', false);
+      if (amount <= 0) return say('Enter an amount', false);
+      if (amount > available()) return say('Exceeds available savings', false);
 
-      allocated += amount;
+      await postJSON('/api/investments/allocate', { asset: card.dataset.key, amountUSD: amount });
+
+      sessionAllocated += amount;
+      const after = await getJSON('/api/investments/total');
+      persistentAllocated = Math.max(0, Number(after.totalUSD || 0));
+
       input.value = '';
-      msg.textContent = `Invested ${INR(amount)} ✅`;
+      msg.textContent = `Invested ${USD(amount)} ✅`;
       refresh();
-
-      // later: persist with POST if you wish
-      // postJSON('/api/investments/allocate', { asset: card.dataset.key, amount });
+      say('Investment saved');
     });
   });
 
   refresh();
 }
 function renderSettings(){ $app.innerHTML = `<div class="card"><div class="notice">FY fixed (Apr→Mar). Extend server to change defaults.</div></div>`; }
+window.addEventListener('load', () => setPage('dashboard'));
