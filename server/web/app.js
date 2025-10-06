@@ -17,8 +17,29 @@ const USD = (x) => new Intl.NumberFormat('en-US', {
 }).format(x);
 
 
+// Initialize default ledger if missing
+if (!localStorage.getItem("ledger")) {
+  const defaultLedger = [];
+  localStorage.setItem("ledger", JSON.stringify(defaultLedger));
+}
 
-async function renderDashboard(){
+// Initialize default savings
+if (!localStorage.getItem("savings")) {
+  localStorage.setItem("savings", "10000"); // start with $10,000 by default
+}
+
+// Sync global savings variable
+let savings = parseFloat(localStorage.getItem("savings")) || 0;
+
+
+
+async function renderDashboard() {
+  // helper: USD formatter (scoped here so it works even if you didn't add a global)
+  const MONEY = (x) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 })
+      .format(Number(x || 0));
+
+  // skeleton UI
   $app.innerHTML = `
     <div class="grid grid-3">
       <div class="card kpi"><div>Total Income</div><div class="val" id="k1">—</div></div>
@@ -29,49 +50,100 @@ async function renderDashboard(){
       <div class="card"><canvas id="trend" height="220"></canvas></div>
       <div class="card"><div class="pie-wrap"><canvas id="pie"></canvas></div></div>
     </div>
-    <div class="card notice">Tip: Fill monthly values in the Expenses tab to see charts here.</div>`;
+    <div class="card notice">Tip: Fill monthly values in the Expenses tab to see charts here.</div>
+  `;
 
-  const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
-  document.getElementById('k1').textContent = INR(sum.income);
-  document.getElementById('k2').textContent = INR(sum.expenses);
-  document.getElementById('k3').textContent = INR(sum.savings);
+  // ---------- KPIs ----------
+  let sum = {};
+  try { sum = await getJSON(`/api/insights/summary?fyStart=${FY}`) || {}; } catch {}
+  const income   = Number(sum.income)   || 0;
+  const expenses = Number(sum.expenses) || 0;
+  const savings  = Number(sum.savings)  || 0;
 
-  const trend = await getJSON(`/api/insights/trend?fyStart=${FY}`);
-  new Chart(document.getElementById('trend'), { type:'line',
-    data:{ labels: trend.map(d=>d.label), datasets:[ {label:'Income', data:trend.map(d=>d.income)}, {label:'Expenses', data:trend.map(d=>d.expenses)} ] } });
+  document.getElementById('k1').textContent = MONEY(income);
+  document.getElementById('k2').textContent = MONEY(expenses);
+  document.getElementById('k3').textContent = MONEY(savings);
 
-  const split = await getJSON(`/api/insights/split?fyStart=${FY}`);
-  const total = Object.values(split).reduce((a,b)=>a+b,0);
-  new Chart(document.getElementById('pie'), {
-    type: 'pie',
-    data: { labels: Object.keys(split), datasets: [{ data: Object.values(split) }] },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: { position: 'bottom' },
-        datalabels: {
-          color: '#fff',
-          formatter: (val, ctx) => {
-            const pct = total ? (val/total*100) : 0;
-            return pct >= 4 ? pct.toFixed(1) + '%' : '';
-          },
-          font: { weight:'600', size: 10 }
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              const v = ctx.parsed;
-              const pct = total ? (v/total*100) : 0;
-              return `${ctx.label}: ${INR(v)} (${pct.toFixed(1)}%)`;
+  // ---------- Trend chart ----------
+  let trend = [];
+  try { trend = await getJSON(`/api/insights/trend?fyStart=${FY}`) || []; } catch {}
+  const trendLabels  = trend.map(d => d.label ?? '');
+  const trendIncome  = trend.map(d => Number(d.income)  || 0);
+  const trendExpense = trend.map(d => Number(d.expenses)|| 0);
+
+  try {
+    const trendPlugins = [];
+    if (window.ChartDataLabels) trendPlugins.push(ChartDataLabels);
+
+    new Chart(document.getElementById('trend'), {
+      type: 'line',
+      data: {
+        labels: trendLabels,
+        datasets: [
+          { label: 'Income',  data: trendIncome },
+          { label: 'Expenses', data: trendExpense }
+        ]
+      },
+      options: {
+        plugins: {
+          legend: { position: 'bottom' },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${MONEY(ctx.parsed.y)}`
             }
           }
         }
+      },
+      plugins: trendPlugins
+    });
+  } catch (e) {
+    console.error('Trend chart error:', e);
+  }
+
+  // ---------- Split pie ----------
+  let split = {};
+  try { split = await getJSON(`/api/insights/split?fyStart=${FY}`) || {}; } catch {}
+  const labels = Object.keys(split);
+  const values = Object.values(split).map(v => Number(v)||0);
+  const total  = values.reduce((a,b)=>a+b,0);
+
+  try {
+    const piePlugins = [];
+    const optionsPlugins = {
+      legend: { position: 'bottom' },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const v = ctx.parsed;
+            const pct = total ? (v / total * 100) : 0;
+            return `${ctx.label}: ${MONEY(v)} (${pct.toFixed(1)}%)`;
+          }
+        }
       }
-    },
-    plugins: [ChartDataLabels]
-  });
+    };
+    if (window.ChartDataLabels) {
+      piePlugins.push(ChartDataLabels);
+      optionsPlugins.datalabels = {
+        color: '#fff',
+        formatter: (val) => {
+          const pct = total ? (val / total * 100) : 0;
+          return pct >= 4 ? pct.toFixed(1) + '%' : '';
+        },
+        font: { weight: '600', size: 10 }
+      };
+    }
+
+    new Chart(document.getElementById('pie'), {
+      type: 'pie',
+      data: { labels, datasets: [{ data: values }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: optionsPlugins },
+      plugins: piePlugins
+    });
+  } catch (e) {
+    console.error('Pie chart error:', e);
+  }
 }
+
 
 async function renderExpenses(){
   const ledger = await getJSON(`/api/ledger?fyStart=${FY}`);
@@ -98,6 +170,8 @@ async function renderExpenses(){
   document.getElementById('export').onclick=()=> window.location=`/api/ledger/export/csv?fyStart=${FY}`;
   document.getElementById('import').onclick=async()=>{ const f=document.getElementById('csv').files[0]; if(!f) return alert('Choose a CSV'); const fd=new FormData(); fd.append('file',f); const r=await fetch(`/api/ledger/import/csv?fyStart=${FY}`,{method:'POST',body:fd}); const js=await r.json(); if(js.ok){ alert('Import done'); renderExpenses(); } else alert('Import failed'); };
 }
+
+
 
 async function renderInsights(){ await renderDashboard(); }
 
