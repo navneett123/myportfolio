@@ -101,14 +101,14 @@ async function renderExpenses(){
 
 async function renderInsights(){ await renderDashboard(); }
 
-async function renderInvestments() {
-  // Pull savings and current investments
-  const sum = await getJSON(`/api/insights/summary?fyStart=${FY}`);
+async function renderInvestments(){
+  // Savings from your Insights API (income - expenses)
+  const sum      = await getJSON(`/api/insights/summary?fyStart=${FY}`);
   const invested = await getJSON('/api/investments/total');
 
-  let baseSavings = Math.max(0, Number(sum.savings || 0));
-  let persistentAllocated = Math.max(0, Number(invested.totalUSD || 0));
-  let sessionAllocated = 0;
+  let baseSavings          = Math.max(0, Number(sum.savings || 0));            // USD
+  let persistentAllocated  = Math.max(0, Number(invested.totalUSD || 0));      // from file
+  let sessionAllocated     = 0;                                                // this session
 
   const available = () => Math.max(0, baseSavings - persistentAllocated - sessionAllocated);
 
@@ -122,9 +122,8 @@ async function renderInvestments() {
 
   $app.innerHTML = `
     <div class="inv-top">
-      <div class="inv-title">
-        <strong>Investments</strong>
-        <span class="muted">Allocate from your available savings only (USD)</span>
+      <div class="inv-title"><strong>Investments</strong>
+        <span class="muted">Allocate only from available savings (USD)</span>
       </div>
       <div class="inv-pills">
         <div class="pill"><div class="pill-k">Available</div><div id="invAvail" class="pill-v">${USD(available())}</div></div>
@@ -141,11 +140,13 @@ async function renderInvestments() {
             <span class="badge">${a.band}</span>
           </header>
           <p class="muted">${a.note}</p>
+
           <div class="ctrl">
             <button class="btn minus" title="Reduce">−</button>
             <input type="number" class="amt" min="0" step="100" placeholder="$ amount">
             <button class="btn plus"  title="Add">+</button>
           </div>
+
           <button class="btn invest" title="Invest">Invest</button>
           <div class="msg muted"></div>
         </article>
@@ -155,20 +156,20 @@ async function renderInvestments() {
     <div id="invToast" class="inv-toast" style="display:none"></div>
   `;
 
-  const availEl = document.getElementById('invAvail');
-  const allocEl = document.getElementById('invAlloc');
+  const availEl   = document.getElementById('invAvail');
+  const allocEl   = document.getElementById('invAlloc');
   const persistEl = document.getElementById('invAllocPersist');
-  const toast = document.getElementById('invToast');
+  const toast     = document.getElementById('invToast');
 
   const say = (msg, ok=true) => {
     toast.textContent = msg;
     toast.style.background = ok ? '#16a34a' : '#dc2626';
     toast.style.display = 'block';
-    setTimeout(() => toast.style.display = 'none', 1200);
+    setTimeout(()=> toast.style.display='none', 1100);
   };
   const refresh = () => {
-    availEl.textContent = USD(available());
-    allocEl.textContent = USD(sessionAllocated);
+    availEl.textContent   = USD(available());
+    allocEl.textContent   = USD(sessionAllocated);
     persistEl.textContent = USD(persistentAllocated);
   };
 
@@ -192,11 +193,13 @@ async function renderInvestments() {
 
     invest.addEventListener('click', async () => {
       const amount = Math.floor(+input.value || 0);
-      if (amount <= 0) return say('Enter an amount', false);
-      if (amount > available()) return say('Exceeds available savings', false);
+      if (amount <= 0)           return say('Enter an amount', false);
+      if (amount > available())  return say('Exceeds available savings', false);
 
+      // Persist to backend
       await postJSON('/api/investments/allocate', { asset: card.dataset.key, amountUSD: amount });
 
+      // Update UI immediately (no reload), then sync with persisted totals
       sessionAllocated += amount;
       const after = await getJSON('/api/investments/total');
       persistentAllocated = Math.max(0, Number(after.totalUSD || 0));
