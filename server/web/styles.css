@@ -61,3 +61,73 @@ button.primary{ background:var(--accent); color:#fff; border:none; padding:8px 1
 .inv-equity{background:linear-gradient(135deg,#ecfdf5 0%,#bbf7d0 55%,#fff 100%)}
 .inv-reits{background:linear-gradient(135deg,#fdf2f8 0%,#fecdd3 55%,#fff 100%)}
 
+/* ===================== THEME TOKENS ===================== */
+:root {
+  --bg: #f6f8fb;
+  --fg: #0f172a;
+  --muted: #64748b;
+
+  --card: #ffffff;
+  --border: #e5e7eb;
+
+  --kpi-bg: var(--card);
+  --sidebar-bg: #0f172a0a;
+
+  --accent: #2563eb; /* optional accent */
+}
+
+:root.dark {
+  --bg: #0b1220;
+  --fg: #e5e7eb;
+  --muted: #94a3b8;
+
+  --card: #111827;
+  --border: #1f2937;
+
+  --kpi-bg: #0f172a;
+  --sidebar-bg: #0b1220;
+  --accent: #60a5fa;
+}
+
+/* ================== WIRING TO EXISTING UI ================= */
+html, body { background: var(--bg); color: var(--fg); }
+
+/* Topbar layout (if you don’t already have it) */
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.topbar, .sidebar { background: var(--sidebar-bg); }
+
+/* Common containers */
+.card, .kpi, .table, .controls, .notice {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--fg);
+}
+
+/* KPI tiles (if you use them) */
+.kpi { background: var(--kpi-bg); }
+
+/* Inputs & selects */
+input, select, textarea {
+  background: var(--card);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+/* Buttons */
+button, .btn, .ghost, .primary {
+  color: var(--fg);
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+
+/* Icon button for theme toggle */
+.icon-btn {
+  display:inline-flex; align-items:center; justify-content:center;
+  width:36px; height:36px; border-radius:9999px;
+  cursor:pointer; transition:transform .15s ease, background .2s ease;
+}
+.icon-btn:hover { transform: translateY(-1px); }
+
+/* Optional smooth transition between themes */
+* { transition: background-color .2s ease, color .2s ease, border-color .2s ease; }
+
