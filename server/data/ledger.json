@@ -172,16 +172,16 @@
       "notes": ""
     },
     "2": {
-      "income": 0,
-      "gas": 0,
-      "electricity": 0,
-      "food": 0,
-      "rent": 0,
-      "transport": 0,
-      "health": 0,
-      "education": 0,
-      "shopping": 0,
-      "misc": 0,
+      "income": 11000,
+      "gas": 200,
+      "electricity": 300,
+      "food": 300,
+      "rent": 500,
+      "transport": 400,
+      "health": 1000,
+      "education": 1000,
+      "shopping": 1000,
+      "misc": 1000,
       "notes": ""
     },
     "3": {
